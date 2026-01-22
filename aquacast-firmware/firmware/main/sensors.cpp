@@ -459,3 +459,4 @@ bool sensorReadingToJSON(const SensorReading& reading, char* buffer, size_t buff
   size_t len = serializeJson(doc, buffer, buffer_size);
   return (len > 0 && len < buffer_size);
 }
+
