@@ -1,0 +1,88 @@
+/*
+  Keyestudio Turbidity Sensor (3 wires: G V S) - ESP32 NodeMCU-32S
+  Wiring:
+    G -> GND
+    V -> 3V3  (recommended for safety)
+    S -> GPIO34 (ADC1, input only)
+
+  Output:
+    - raw ADC (0~4095)
+    - estimated voltage (0~3.3V)
+    - optional rough NTU estimate (needs calibration!)
+*/
+
+const int TURB_PIN = 34;          // GPIO34 (ADC1)
+const int SAMPLE_N = 20;          // number of samples per reading
+const int SAMPLE_DELAY_MS = 5;    // delay between samples
+const int PRINT_INTERVAL_MS = 300;
+
+unsigned long lastPrint = 0;
+
+float readVoltageAvg() {
+  long sum = 0;
+  for (int i = 0; i < SAMPLE_N; i++) {
+    sum += analogRead(TURB_PIN);
+    delay(SAMPLE_DELAY_MS);
+  }
+  float rawAvg = (float)sum / SAMPLE_N;
+
+  // ESP32 ADC is not perfectly linear; this is a practical approximation
+  float voltage = rawAvg * (3.3f / 4095.0f);
+  return voltage;
+}
+
+// Optional: rough NTU estimate used by many turbidity modules online.
+// This is NOT accurate unless you calibrate with known samples.
+float estimateNTU(float voltage) {
+  // Common empirical curve (often quoted for SEN0189-like modules):
+  // NTU = -1120.4*V^2 + 5742.3*V - 4352.9
+  // Clamp at 0
+  float ntu = -1120.4f * voltage * voltage + 5742.3f * voltage - 4352.9f;
+  if (ntu < 0) ntu = 0;
+  return ntu;
+}
+
+void setup() {
+  Serial.begin(115200);
+  delay(500);
+
+  // 12-bit ADC (0~4095)
+  analogReadResolution(12);
+
+  // Increase input range to reduce saturation risk (optional but helpful)
+  // If your Arduino core supports it:
+  #ifdef ARDUINO_ARCH_ESP32
+    // Some cores support analogSetPinAttenuation(pin, attenuation)
+    // ADC_11db allows ~0-3.3V range (approx).
+    // If compilation fails, just comment out this line.
+    analogSetPinAttenuation(TURB_PIN, ADC_11db);
+  #endif
+
+  Serial.println("=== Turbidity Sensor Test (ESP32 NodeMCU-32S) ===");
+  Serial.println("Wiring: G->GND, V->3V3, S->GPIO34");
+  Serial.println("Place sensor in air / clean water / dirty water and watch values change.");
+  Serial.println();
+}
+
+void loop() {
+  if (millis() - lastPrint >= PRINT_INTERVAL_MS) {
+    lastPrint = millis();
+
+    // Read averaged voltage
+    float voltage = readVoltageAvg();
+    int rawNow = analogRead(TURB_PIN); // one quick raw for reference
+    float ntu = estimateNTU(voltage);
+
+    Serial.print("RAW(now): ");
+    Serial.print(rawNow);
+
+    Serial.print(" | Voltage(avg): ");
+    Serial.print(voltage, 3);
+    Serial.print(" V");
+
+    Serial.print(" | NTU(est): ");
+    Serial.print(ntu, 1);
+
+    Serial.println();
+  }
+}
