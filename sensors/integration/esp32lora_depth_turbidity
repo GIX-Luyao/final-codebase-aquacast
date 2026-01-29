@@ -1,0 +1,109 @@
+#include <Wire.h>
+#include "MS5837.h"
+
+// -------- Pin setup (Heltec WiFi LoRa 32 V3 / ESP32-S3) --------
+static const int I2C_SDA = 41;
+static const int I2C_SCL = 42;
+
+static const int TURB_PIN = 4;   // Turbidity "S" signal -> GPIO4 (ADC)
+
+// -------- MS5837 --------
+MS5837 ms;
+
+// -------- Turbidity averaging --------
+const int AVG_N = 20;
+int turbBuf[AVG_N];
+int turbIdx = 0;
+long turbSum = 0;
+bool turbFilled = false;
+
+unsigned long lastPrint = 0;
+
+float adcToVoltage(int raw) {
+  return (raw / 4095.0f) * 3.3f;   // if turb sensor powered by 3V3
+}
+
+// Placeholder NTU estimate (replace with your calibration)
+float estimateNTU(float vAvg) {
+  float ntu = (3.3f - vAvg) * 1000.0f;
+  if (ntu < 0) ntu = 0;
+  return ntu;
+}
+
+void setup() {
+  Serial.begin(115200);
+  delay(200);
+
+  // ----- I2C -----
+  Wire.begin(I2C_SDA, I2C_SCL);
+
+  // ----- MS5837 init -----
+  if (!ms.init()) {
+    Serial.println("❌ MS5837 init failed. Check wiring: VCC=3V3, GND, SDA=41, SCL=42");
+    while (1) delay(1000);
+  }
+
+  // Try 30BA first (most common for BlueRobotics depth sensor)
+  ms.setModel(MS5837::MS5837_30BA);
+  ms.setFluidDensity(997); // fresh water
+
+  Serial.println("✅ MS5837 ready.");
+
+  // ----- ADC setup -----
+  analogReadResolution(12);
+
+  // Some ESP32 cores support this:
+  // If your IDE complains about ADC_11db, tell me your ESP32 core version and I'll adjust.
+  analogSetAttenuation(ADC_11db);
+
+  // init turb buffer
+  for (int i = 0; i < AVG_N; i++) turbBuf[i] = 0;
+
+  Serial.println("✅ Turbidity ADC ready on GPIO4.");
+}
+
+void updateTurbidity() {
+  int raw = analogRead(TURB_PIN);
+
+  turbSum -= turbBuf[turbIdx];
+  turbBuf[turbIdx] = raw;
+  turbSum += raw;
+
+  turbIdx++;
+  if (turbIdx >= AVG_N) {
+    turbIdx = 0;
+    turbFilled = true;
+  }
+}
+
+void loop() {
+  ms.read();
+  updateTurbidity();
+
+  if (millis() - lastPrint >= 1000) {
+    lastPrint = millis();
+
+    float tempC = ms.temperature();
+    float pressure_mbar = ms.pressure();
+    float depth_m = ms.depth();
+
+    int rawNow = turbBuf[(turbIdx - 1 + AVG_N) % AVG_N];
+    int count = turbFilled ? AVG_N : turbIdx;
+    float rawAvg = (count > 0) ? (turbSum / (float)count) : 0;
+
+    float vNow = adcToVoltage(rawNow);
+    float vAvg = adcToVoltage((int)rawAvg);
+    float ntuEst = estimateNTU(vAvg);
+
+    Serial.print("Depth(m): "); Serial.print(depth_m, 3);
+    Serial.print(" | Temp(C): "); Serial.print(tempC, 2);
+    Serial.print(" | P(mbar): "); Serial.print(pressure_mbar, 2);
+
+    Serial.print(" | Turb RAW: "); Serial.print(rawNow);
+    Serial.print(" | Vnow: "); Serial.print(vNow, 3);
+    Serial.print(" | Vavg: "); Serial.print(vAvg, 3);
+    Serial.print(" | NTU(est): "); Serial.println(ntuEst, 1);
+  }
+
+  delay(50);
+}
