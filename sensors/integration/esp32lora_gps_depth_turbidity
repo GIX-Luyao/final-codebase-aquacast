@@ -1,0 +1,141 @@
+#include <Wire.h>
+#include "MS5837.h"
+#include <TinyGPSPlus.h>
+#include <HardwareSerial.h>
+
+// ---------------- Pins ----------------
+static const int I2C_SDA  = 41;
+static const int I2C_SCL  = 42;
+
+static const int TURB_PIN = 4;     // Turbidity analog signal
+static const int GPS_RX   = 48;    // ESP32 RX  <- GPS TXD
+static const int GPS_TX   = -1;    // Not used (GPS RXD not connected)
+
+// ---------------- Objects ----------------
+MS5837 ms;
+TinyGPSPlus gps;
+HardwareSerial GPSSerial(1);
+
+// ---------------- Turbidity averaging ----------------
+const int AVG_N = 20;
+int  turbBuf[AVG_N];
+int  turbIdx = 0;
+long turbSum = 0;
+bool turbFilled = false;
+
+unsigned long lastPrint = 0;
+
+// Convert ADC raw to voltage (assuming turb sensor VCC = 3.3V)
+float adcToVoltage(int raw) {
+  return (raw / 4095.0f) * 3.3f;
+}
+
+// Placeholder NTU estimate (replace with your calibration curve)
+float estimateNTU(float vAvg) {
+  float ntu = (3.3f - vAvg) * 1000.0f;
+  if (ntu < 0) ntu = 0;
+  return ntu;
+}
+
+void updateTurbidity() {
+  int raw = analogRead(TURB_PIN);
+
+  turbSum -= turbBuf[turbIdx];
+  turbBuf[turbIdx] = raw;
+  turbSum += raw;
+
+  turbIdx++;
+  if (turbIdx >= AVG_N) {
+    turbIdx = 0;
+    turbFilled = true;
+  }
+}
+
+void setup() {
+  Serial.begin(115200);
+  delay(1500);
+  Serial.println("BOOT OK");
+
+  // ----- I2C -----
+  Wire.begin(I2C_SDA, I2C_SCL);
+  Serial.println("I2C begin OK");
+
+  // ----- MS5837 -----
+  if (!ms.init()) {
+    Serial.println("❌ MS5837 init failed. Check: 3V3/GND + SDA41/SCL42");
+    while (1) delay(1000);
+  }
+  ms.setModel(MS5837::MS5837_30BA); // if yours is 02BA, change to MS5837_02BA
+  ms.setFluidDensity(997);          // fresh water; seawater ~1029
+  Serial.println("✅ MS5837 ready");
+
+  // ----- ADC -----
+  analogReadResolution(12);
+  // If this line errors on your core version, tell me the exact error and I'll adjust.
+  analogSetAttenuation(ADC_11db);
+  for (int i = 0; i < AVG_N; i++) turbBuf[i] = 0;
+  Serial.println("✅ Turbidity ADC ready (GPIO4)");
+
+  // ----- GPS UART -----
+  GPSSerial.begin(9600, SERIAL_8N1, GPS_RX, GPS_TX);
+  Serial.println("✅ GPS UART ready (RX=GPIO48, 9600bps)");
+
+  Serial.println("---- Printing every 1s ----");
+}
+
+void loop() {
+  // Feed GPS parser
+  while (GPSSerial.available()) {
+    gps.encode(GPSSerial.read());
+  }
+
+  // Read depth sensor
+  ms.read();
+
+  // Sample turbidity
+  updateTurbidity();
+
+  // Print once per second
+  if (millis() - lastPrint >= 1000) {
+    lastPrint = millis();
+
+    // MS5837
+    float tempC        = ms.temperature();
+    float pressure_mbar= ms.pressure();
+    float depth_m      = ms.depth();
+
+    // Turbidity
+    int rawNow = turbBuf[(turbIdx - 1 + AVG_N) % AVG_N];
+    int count  = turbFilled ? AVG_N : turbIdx;
+    float rawAvg = (count > 0) ? (turbSum / (float)count) : 0;
+    float vNow = adcToVoltage(rawNow);
+    float vAvg = adcToVoltage((int)rawAvg);
+    float ntuEst = estimateNTU(vAvg);
+
+    // GPS fields
+    bool fix = gps.location.isValid() && gps.location.age() < 3000;
+    int sats = gps.satellites.isValid() ? gps.satellites.value() : 0;
+    double hdop = gps.hdop.isValid() ? gps.hdop.hdop() : 99.99;
+
+    Serial.print("Depth(m): "); Serial.print(depth_m, 3);
+    Serial.print(" | Temp(C): "); Serial.print(tempC, 2);
+    Serial.print(" | P(mbar): "); Serial.print(pressure_mbar, 2);
+
+    Serial.print(" | GPS: ");
+    if (fix) {
+      Serial.print(gps.location.lat(), 6);
+      Serial.print(",");
+      Serial.print(gps.location.lng(), 6);
+    } else {
+      Serial.print("NO FIX");
+    }
+    Serial.print(" | Sats: "); Serial.print(sats);
+    Serial.print(" | HDOP: "); Serial.print(hdop, 2);
+
+    Serial.print(" | Turb RAW: "); Serial.print(rawNow);
+    Serial.print(" | Vavg: "); Serial.print(vAvg, 3);
+    Serial.print(" | NTU(est): "); Serial.println(ntuEst, 1);
+  }
+
+  delay(20);
+}
