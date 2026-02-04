@@ -1,0 +1,327 @@
+#include <Wire.h>
+#include "MS5837.h"
+#include <ESP32Servo.h>
+#include <TinyGPSPlus.h>
+#include <HardwareSerial.h>
+
+// ===================== PINS =====================
+static const int I2C_SDA = 41;
+static const int I2C_SCL = 42;
+
+static const int TURB_PIN = 4;
+
+static const int GPS_RX = 48;
+static const int GPS_TX = -1;
+
+static const int RELAY_PIN = 26;
+static const int SERVO_PIN = 19;
+
+// ===================== SETTINGS =====================
+static const unsigned long BOOT_STABILIZE_MS = 2000;
+
+// Tare pressure (baseline)
+static const int  TARE_SAMPLES = 10;
+static const int  TARE_SAMPLE_INTERVAL_MS = 50;
+
+// --- Water-mode thresholds (pressure-based) ---
+static const float WATER_ENTER_DP_MBAR   = 30.0f;  // auto-detect water if ΔP > 30 mbar
+static const float VALVE_TRIGGER_DP_MBAR = 20.0f;  // "down 0.2m" ~ 20 mbar
+static const float MOTOR_TRIGGER_DP_MBAR = 2.0f;   // near surface when ΔP <= 2 mbar
+
+// --- Air-test thresholds (turbidity cover) ---
+static const float AIR_COVER_VOLT = 0.80f;         // adjust after you see Vavg print
+static const unsigned long AIR_DEBOUNCE_MS = 500;  // cover must persist 0.5s to count
+
+// Fallback timer
+static const unsigned long VALVE_FALLBACK_DELAY_MS = 3000;
+
+// Optional: auto valve off after motor
+static const bool AUTO_VALVE_OFF_AFTER_MOTOR = true;
+static const unsigned long VALVE_OFF_DELAY_AFTER_MOTOR_MS = 2000;
+
+// Relay polarity (set true if your relay is LOW-trigger)
+static const bool RELAY_ACTIVE_LOW = false;
+
+// Turbidity averaging
+static const int AVG_N = 20;
+
+// Servo angles
+static const int SERVO_OFF_ANGLE = 0;
+static const int SERVO_ON_ANGLE  = 90;
+
+// ===================== OBJECTS =====================
+MS5837 ms;
+Servo samplerServo;
+
+TinyGPSPlus gps;
+HardwareSerial GPSSerial(1);
+
+// ===================== TURBIDITY BUFFER =====================
+int  turbBuf[AVG_N];
+int  turbIdx = 0;
+long turbSum = 0;
+bool turbFilled = false;
+
+// ===================== STATE MACHINE =====================
+enum State {
+  BOOT_STABILIZE,
+  TARE_BASELINE,
+  WAIT_FOR_VALVE_TRIGGER,
+  VALVE_ON_WAIT_MOTOR,
+  MOTOR_ON_WAIT_VALVE_OFF,
+  DONE
+};
+State state = BOOT_STABILIZE;
+
+unsigned long bootTime = 0;
+unsigned long valveStartTime = 0;
+unsigned long motorStartTime = 0;
+
+// Baseline pressure
+float p0_mbar = 0.0f;
+bool  baselineDone = false;
+
+// Air-test cover timing
+unsigned long airCoverStart = 0;
+bool airCoverLatched = false;
+
+// ===================== HELPERS =====================
+void valveOn()  { digitalWrite(RELAY_PIN, RELAY_ACTIVE_LOW ? LOW : HIGH); }
+void valveOff() { digitalWrite(RELAY_PIN, RELAY_ACTIVE_LOW ? HIGH : LOW); }
+
+void motorOn()  { samplerServo.write(SERVO_ON_ANGLE); }
+void motorOff() { samplerServo.write(SERVO_OFF_ANGLE); }
+
+float adcToVoltage(int raw) { return (raw / 4095.0f) * 3.3f; }
+
+float estimateNTU(float vAvg) {
+  float ntu = (3.3f - vAvg) * 1000.0f;
+  if (ntu < 0) ntu = 0;
+  return ntu;
+}
+
+void updateTurbidity() {
+  int raw = analogRead(TURB_PIN);
+  turbSum -= turbBuf[turbIdx];
+  turbBuf[turbIdx] = raw;
+  turbSum += raw;
+
+  turbIdx++;
+  if (turbIdx >= AVG_N) {
+    turbIdx = 0;
+    turbFilled = true;
+  }
+}
+
+float avgPressureMbar() {
+  float sum = 0.0f;
+  for (int i = 0; i < TARE_SAMPLES; i++) {
+    ms.read();
+    sum += ms.pressure(); // mbar
+    delay(TARE_SAMPLE_INTERVAL_MS);
+  }
+  return sum / (float)TARE_SAMPLES;
+}
+
+const char* stateName(State s) {
+  switch (s) {
+    case BOOT_STABILIZE: return "BOOT_STABILIZE";
+    case TARE_BASELINE: return "TARE_BASELINE";
+    case WAIT_FOR_VALVE_TRIGGER: return "WAIT_FOR_VALVE_TRIGGER";
+    case VALVE_ON_WAIT_MOTOR: return "VALVE_ON_WAIT_MOTOR";
+    case MOTOR_ON_WAIT_VALVE_OFF: return "MOTOR_ON_WAIT_VALVE_OFF";
+    case DONE: return "DONE";
+    default: return "UNKNOWN";
+  }
+}
+
+// Auto-detect: are we in water (pressure increased enough)?
+bool inWater(float dp_mbar) {
+  return dp_mbar > WATER_ENTER_DP_MBAR;
+}
+
+// Air-test: detect "cover" gesture on turbidity (vAvg low for AIR_DEBOUNCE_MS)
+bool airCoverTriggered(float vAvg, unsigned long now) {
+  bool covered = (vAvg <= AIR_COVER_VOLT);
+
+  if (covered) {
+    if (airCoverStart == 0) airCoverStart = now;
+    if (!airCoverLatched && (now - airCoverStart >= AIR_DEBOUNCE_MS)) {
+      airCoverLatched = true; // one-shot latch
+      return true;
+    }
+  } else {
+    airCoverStart = 0;
+    airCoverLatched = false;
+  }
+  return false;
+}
+
+// Air-test: "release" gesture = uncovered
+bool airUncovered(float vAvg) {
+  return vAvg > AIR_COVER_VOLT + 0.10f; // hysteresis
+}
+
+// ===================== SETUP =====================
+void setup() {
+  Serial.begin(115200);
+  delay(800);
+
+  pinMode(RELAY_PIN, OUTPUT);
+  valveOff();
+
+  samplerServo.setPeriodHertz(50);
+  samplerServo.attach(SERVO_PIN, 500, 2500);
+  motorOff();
+
+  Wire.begin(I2C_SDA, I2C_SCL);
+  if (!ms.init()) {
+    Serial.println("ERROR: MS5837 init failed. Check I2C pins/wiring/power.");
+    while (1) delay(1000);
+  }
+  ms.setModel(MS5837::MS5837_30BA);
+  ms.setFluidDensity(997);
+
+  analogReadResolution(12);
+  analogSetAttenuation(ADC_11db);
+  for (int i = 0; i < AVG_N; i++) turbBuf[i] = 0;
+
+  GPSSerial.begin(9600, SERIAL_8N1, GPS_RX, GPS_TX);
+
+  bootTime = millis();
+  state = BOOT_STABILIZE;
+
+  Serial.println("✅ Auto-run (Air Test + Water Run) with baseline pressure");
+  Serial.println("Air test: cover turbidity probe to trigger valve; uncover to trigger motor (or 3s fallback).");
+}
+
+// ===================== LOOP =====================
+void loop() {
+  unsigned long now = millis();
+
+  while (GPSSerial.available()) gps.encode(GPSSerial.read());
+
+  ms.read();
+  float depth_m       = ms.depth();
+  float temp_c        = ms.temperature();
+  float pressure_mbar = ms.pressure();
+
+  updateTurbidity();
+  int count = turbFilled ? AVG_N : turbIdx;
+  float rawAvg = (count > 0) ? (turbSum / (float)count) : 0.0f;
+  float vAvg   = adcToVoltage((int)rawAvg);
+  float ntuEst = estimateNTU(vAvg);
+
+  bool fix = gps.location.isValid() && gps.location.age() < 3000;
+  int sats = gps.satellites.isValid() ? gps.satellites.value() : 0;
+
+  float dp_mbar = baselineDone ? (pressure_mbar - p0_mbar) : 0.0f;
+  bool water = baselineDone ? inWater(dp_mbar) : false;
+
+  // ---- State machine ----
+  if (state == BOOT_STABILIZE) {
+    if (now - bootTime >= BOOT_STABILIZE_MS) {
+      Serial.println("Stabilize done -> TARE_BASELINE (pressure baseline)");
+      state = TARE_BASELINE;
+    }
+  }
+  else if (state == TARE_BASELINE) {
+    p0_mbar = avgPressureMbar();
+    baselineDone = true;
+    Serial.print("BASELINE DONE. p0=");
+    Serial.print(p0_mbar, 1);
+    Serial.println(" mbar. Now using dp = pressure - p0.");
+    state = WAIT_FOR_VALVE_TRIGGER;
+  }
+  else if (state == WAIT_FOR_VALVE_TRIGGER) {
+    // Water: trigger when dp >= 20mbar (≈0.2m)
+    // Air: trigger when turbidity is covered for 0.5s
+    bool triggerValve = false;
+
+    if (baselineDone && water) {
+      triggerValve = (dp_mbar >= VALVE_TRIGGER_DP_MBAR);
+    } else {
+      triggerValve = airCoverTriggered(vAvg, now);
+    }
+
+    if (triggerValve) {
+      Serial.print("VALVE TRIGGERED (");
+      Serial.print(water ? "WATER dp=" : "AIR vAvg=");
+      Serial.print(water ? dp_mbar : vAvg, water ? 1 : 3);
+      Serial.println(") -> Valve ON");
+
+      valveOn();
+      valveStartTime = now;
+      state = VALVE_ON_WAIT_MOTOR;
+    }
+  }
+  else if (state == VALVE_ON_WAIT_MOTOR) {
+    bool triggerMotor = false;
+
+    if (baselineDone && water) {
+      // Water: motor when back near surface (dp <= 2mbar)
+      triggerMotor = (dp_mbar <= MOTOR_TRIGGER_DP_MBAR);
+    } else {
+      // Air: motor when uncovered (or 3s fallback)
+      triggerMotor = airUncovered(vAvg);
+    }
+
+    if (triggerMotor) {
+      Serial.print("MOTOR TRIGGERED (");
+      Serial.print(water ? "WATER dp=" : "AIR vAvg=");
+      Serial.print(water ? dp_mbar : vAvg, water ? 1 : 3);
+      Serial.println(") -> Motor ON");
+
+      motorOn();
+      motorStartTime = now;
+      state = AUTO_VALVE_OFF_AFTER_MOTOR ? MOTOR_ON_WAIT_VALVE_OFF : DONE;
+    }
+    else if (now - valveStartTime >= VALVE_FALLBACK_DELAY_MS) {
+      Serial.println("MOTOR FALLBACK (timer) -> Motor ON");
+      motorOn();
+      motorStartTime = now;
+      state = AUTO_VALVE_OFF_AFTER_MOTOR ? MOTOR_ON_WAIT_VALVE_OFF : DONE;
+    }
+  }
+  else if (state == MOTOR_ON_WAIT_VALVE_OFF) {
+    if (now - motorStartTime >= VALVE_OFF_DELAY_AFTER_MOTOR_MS) {
+      Serial.println("Auto valve OFF after motor delay.");
+      valveOff();
+      state = DONE;
+    }
+  }
+
+  // ---- Print status (1Hz) ----
+  static unsigned long lastPrint = 0;
+  if (now - lastPrint >= 1000) {
+    lastPrint = now;
+
+    Serial.print("Depth: "); Serial.print(depth_m, 3); Serial.print(" m");
+    Serial.print(" | P: "); Serial.print(pressure_mbar, 1); Serial.print(" mbar");
+    Serial.print(" | dP: "); Serial.print(dp_mbar, 1); Serial.print(" mbar");
+    Serial.print(" | Mode: "); Serial.print(water ? "WATER" : "AIR");
+
+    Serial.print(" | Turb(Vavg): "); Serial.print(vAvg, 3); Serial.print(" V");
+    Serial.print(" | NTU(est): "); Serial.print(ntuEst, 1);
+
+    Serial.print(" | GPS: ");
+    if (fix) {
+      Serial.print(gps.location.lat(), 6);
+      Serial.print(",");
+      Serial.print(gps.location.lng(), 6);
+    } else {
+      Serial.print("NO FIX");
+    }
+    Serial.print(" | Sats: "); Serial.print(sats);
+
+    Serial.print(" | Valve: ");
+    bool valvePin = digitalRead(RELAY_PIN);
+    bool valveIsOn = RELAY_ACTIVE_LOW ? (valvePin == LOW) : (valvePin == HIGH);
+    Serial.print(valveIsOn ? "ON" : "OFF");
+
+    Serial.print(" | State: ");
+    Serial.println(stateName(state));
+  }
+
+  delay(20);
+}
