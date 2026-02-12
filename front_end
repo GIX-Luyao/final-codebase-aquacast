@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>AquaCast Mission Dashboard — Lab Integration Test</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root {
+  --deep-blue:#065A82; --teal:#1C7293; --seafoam:#00A896; --mint:#02C39A;
+  --dark-nav:#021C2B; --dark-card:#0A2E45;
+  --slate:#475569; --light-slate:#94A3B8;
+  --green:#22C55E; --amber:#F59E0B; --red:#EF4444; --purple:#A855F7;
+  --off-white:#F0F7FA;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--off-white);color:var(--slate);}
+
+/* NAV */
+.topnav{background:var(--dark-nav);display:flex;align-items:center;justify-content:space-between;padding:0 24px;height:54px;box-shadow:0 2px 12px rgba(0,0,0,.35);}
+.brand{display:flex;align-items:center;gap:10px;}
+.brand-dot{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,var(--seafoam),var(--mint));display:flex;align-items:center;justify-content:center;font-weight:900;color:#fff;font-size:13px;}
+.brand-name{color:#fff;font-weight:700;font-size:17px;}
+.brand-name span{color:var(--mint);}
+.brand-sub{color:var(--light-slate);font-size:11px;margin-left:8px;}
+.nav-tabs{display:flex;gap:3px;}
+.nav-tab{padding:6px 15px;border-radius:6px;cursor:pointer;font-size:13px;color:var(--light-slate);border:none;background:transparent;transition:.15s;}
+.nav-tab.active{background:var(--teal);color:#fff;font-weight:600;}
+.nav-tab:hover:not(.active){background:rgba(255,255,255,.08);color:#fff;}
+.status-pill{display:flex;align-items:center;gap:6px;background:rgba(2,195,154,.15);border:1px solid var(--mint);border-radius:20px;padding:3px 12px;}
+.status-dot{width:7px;height:7px;border-radius:50%;background:var(--mint);animation:pulse 2s infinite;}
+.status-txt{font-size:11px;color:var(--mint);font-weight:600;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.35;}}
+
+/* MISSION BAR */
+.mission-bar{background:linear-gradient(135deg,var(--dark-card),var(--deep-blue));padding:10px 24px;display:flex;align-items:center;gap:18px;flex-wrap:wrap;border-bottom:1px solid rgba(0,168,150,.2);}
+.mission-id{color:var(--mint);font-weight:700;font-size:13px;letter-spacing:.4px;}
+.mission-meta{color:var(--light-slate);font-size:11px;}
+.mission-meta b{color:#fff;}
+.spacer{flex:1;}
+.run-btns{display:flex;gap:5px;align-items:center;}
+.run-btns label{color:var(--light-slate);font-size:11px;}
+.run-btn{padding:4px 13px;border-radius:16px;border:1px solid rgba(255,255,255,.2);background:transparent;color:var(--light-slate);font-size:11px;cursor:pointer;transition:.15s;}
+.run-btn.active{border-color:var(--mint);color:var(--mint);background:rgba(2,195,154,.12);font-weight:700;}
+.owner-tag{display:inline-flex;align-items:center;gap:4px;background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.3);border-radius:12px;padding:3px 10px;font-size:11px;color:var(--purple);font-weight:600;}
+.btn{padding:6px 16px;border-radius:6px;border:none;cursor:pointer;font-size:12px;font-weight:600;transition:.15s;}
+.btn-primary{background:var(--seafoam);color:var(--dark-nav);}
+.btn-primary:hover{background:var(--mint);}
+.btn-outline{background:transparent;border:1px solid var(--teal);color:var(--teal);}
+.btn-outline:hover{background:var(--teal);color:#fff;}
+.btn:disabled{opacity:.45;cursor:not-allowed;}
+
+/* ALERT */
+.alert-bar{padding:7px 24px;font-size:12px;font-weight:600;display:flex;align-items:center;gap:7px;}
+.a-ok  {background:rgba(34,197,94,.09); color:var(--green); border-bottom:1px solid rgba(34,197,94,.2);}
+.a-warn{background:rgba(245,158,11,.09);color:var(--amber); border-bottom:1px solid rgba(245,158,11,.2);}
+.a-err {background:rgba(239,68,68,.09); color:var(--red);   border-bottom:1px solid rgba(239,68,68,.2);}
+
+/* PAGE VISIBILITY */
+.page{display:none;}.page.active{display:block;}
+
+/* ── LIVE VIEW ── */
+.live-layout{padding:14px 24px;display:grid;grid-template-columns:248px 1fr;gap:14px;}
+.sidebar{display:flex;flex-direction:column;gap:11px;}
+.card{background:#fff;border-radius:9px;padding:13px;box-shadow:0 1px 5px rgba(0,0,0,.06);border:1px solid rgba(6,90,130,.09);}
+.card-title{font-size:10px;font-weight:700;color:var(--teal);text-transform:uppercase;letter-spacing:.8px;margin-bottom:9px;}
+.mm{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(6,90,130,.06);}
+.mm:last-child{border-bottom:none;}
+.mm-label{font-size:11px;color:var(--slate);}
+.mm-val{font-size:12px;font-weight:700;color:var(--deep-blue);}
+.mm-ok{color:var(--green);}.mm-warn{color:var(--amber);}.mm-err{color:var(--red);}
+.sbadge{font-size:10px;font-weight:700;padding:2px 7px;border-radius:9px;}
+.bok{background:rgba(34,197,94,.1);color:var(--green);}
+.bwarn{background:rgba(245,158,11,.1);color:var(--amber);}
+.berr{background:rgba(239,68,68,.1);color:var(--red);}
+.srow{display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(6,90,130,.06);}
+.srow:last-child{border-bottom:none;}
+.srow-name{font-size:11px;color:var(--slate);}
+.cond-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:9px;font-size:11px;font-weight:700;}
+.cond-room{background:rgba(245,158,11,.1);color:#d97706;border:1px solid rgba(245,158,11,.25);}
+.cond-cool{background:rgba(96,165,250,.1);color:#2563eb;border:1px solid rgba(96,165,250,.25);}
+.cond-warm{background:rgba(239,68,68,.1);color:#dc2626;border:1px solid rgba(239,68,68,.25);}
+
+/* CHARTS AREA */
+.charts{display:flex;flex-direction:column;gap:11px;}
+.timeline{display:flex;gap:0;margin-bottom:2px;}
+.phase{flex:1;padding:5px 6px;font-size:10px;text-align:center;font-weight:600;}
+.ph-done{background:rgba(2,195,154,.13);color:var(--mint);}
+.ph-active{background:var(--teal);color:#fff;}
+.ph-future{background:rgba(6,90,130,.06);color:var(--light-slate);}
+.phase:first-child{border-radius:6px 0 0 6px;}.phase:last-child{border-radius:0 6px 6px 0;}
+.metric-row{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;}
+.metric-card{background:#fff;border-radius:8px;padding:10px;text-align:center;border:1px solid rgba(6,90,130,.09);box-shadow:0 1px 4px rgba(0,0,0,.04);}
+.metric-val{font-size:20px;font-weight:800;color:var(--deep-blue);line-height:1;}
+.metric-unit{font-size:10px;color:var(--light-slate);}
+.metric-label{font-size:10px;color:var(--slate);margin-top:3px;}
+.chart-row{display:grid;grid-template-columns:1fr 1fr;gap:11px;}
+.chart-card{background:#fff;border-radius:9px;padding:13px;box-shadow:0 1px 5px rgba(0,0,0,.06);border:1px solid rgba(6,90,130,.09);}
+.chart-card h3{font-size:11px;font-weight:700;color:var(--teal);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;}
+.chart-wrap{position:relative;height:165px;}
+.log-wrap{background:#fff;border-radius:9px;padding:13px;border:1px solid rgba(6,90,130,.09);box-shadow:0 1px 5px rgba(0,0,0,.06);}
+.log-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:9px;}
+.log-hdr-title{font-size:10px;font-weight:700;color:var(--teal);text-transform:uppercase;letter-spacing:.8px;}
+.log-scroll{max-height:200px;overflow-y:auto;}
+.log-table{width:100%;border-collapse:collapse;font-size:11px;}
+.log-table th{background:var(--deep-blue);color:#fff;padding:5px 8px;text-align:left;font-size:10px;letter-spacing:.3px;position:sticky;top:0;}
+.log-table td{padding:4px 8px;border-bottom:1px solid rgba(6,90,130,.06);}
+.log-table tr:hover{background:rgba(6,90,130,.03);}
+.log-sample td{background:rgba(2,195,154,.06);}
+.sample-mark{color:var(--mint);font-weight:800;}
+
+/* ── SERIAL LOG ── */
+.serial-wrap{padding:14px 24px;}
+.serial-hdr{display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;}
+.serial-hdr h2{font-size:15px;font-weight:700;color:var(--deep-blue);}
+.serial-meta{font-size:11px;color:var(--light-slate);}
+.run-tabs{display:flex;gap:5px;}
+.rtab{padding:4px 14px;border-radius:5px;border:1px solid var(--teal);background:transparent;color:var(--teal);font-size:11px;cursor:pointer;font-weight:600;transition:.15s;}
+.rtab.active{background:var(--teal);color:#fff;}
+.serial-box{background:#0d1117;border-radius:8px;padding:14px;font-family:'Courier New',monospace;font-size:11px;line-height:1.65;color:#c9d1d9;height:430px;overflow-y:auto;border:1px solid rgba(6,90,130,.25);}
+.st{color:#58a6ff;}.sa{color:#6e7681;}.sk{color:#79c0ff;}.sv{color:#a5d6ff;}
+.ss{color:#6e7681;}.sst{color:#3fb950;font-weight:700;}.sw{color:#f0883e;}
+.sh{color:#bc8cff;font-weight:700;}.sm{color:#02C39A;font-weight:700;}
+.serial-sum{margin-top:12px;display:grid;grid-template-columns:repeat(4,1fr);gap:9px;}
+.sum-card{background:#fff;border-radius:8px;padding:11px;border:1px solid rgba(6,90,130,.09);text-align:center;}
+.sum-val{font-size:19px;font-weight:800;color:var(--deep-blue);}
+.sum-lbl{font-size:10px;color:var(--light-slate);margin-top:2px;}
+
+/* ── CONFIG ── */
+.config-wrap{padding:14px 24px;display:grid;grid-template-columns:1fr 1fr;gap:18px;}
+.form-group{margin-bottom:11px;}
+.form-group label{display:block;font-size:11px;font-weight:600;color:var(--slate);margin-bottom:4px;}
+.form-ctrl{width:100%;padding:7px 9px;border:1px solid rgba(6,90,130,.2);border-radius:5px;font-size:12px;color:var(--deep-blue);outline:none;}
+.form-ctrl:focus{border-color:var(--teal);box-shadow:0 0 0 2px rgba(28,114,147,.13);}
+.checkbox-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px;font-size:12px;}
+.json-box{background:#0d1117;border-radius:7px;padding:12px;font-family:'Courier New',monospace;font-size:10.5px;color:#a5d6ff;height:320px;overflow-y:auto;}
+
+/* ── EXPORT ── */
+.export-wrap{padding:14px 24px;display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+.exp-card{background:#fff;border-radius:9px;padding:18px;border:1px solid rgba(6,90,130,.09);box-shadow:0 1px 5px rgba(0,0,0,.06);}
+.exp-card h3{font-size:13px;font-weight:700;color:var(--deep-blue);margin-bottom:5px;}
+.exp-card p{font-size:11px;color:var(--light-slate);margin-bottom:13px;}
+.stub-badge{background:rgba(245,158,11,.1);color:var(--amber);border:1px solid var(--amber);font-size:9px;padding:1px 7px;border-radius:8px;font-weight:700;margin-left:6px;}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="topnav">
+  <div class="brand">
+    <div class="brand-dot">AC</div>
+    <div class="brand-name">Aqua<span>Cast</span></div>
+    <span class="brand-sub">Mission Dashboard v0.3 — Lab Build</span>
+  </div>
+  <div class="nav-tabs">
+    <button class="nav-tab active" onclick="showPage('live')">📡 Live View</button>
+    <button class="nav-tab" onclick="showPage('serial')">🖥 Serial Log</button>
+    <button class="nav-tab" onclick="showPage('config')">⚙ Config</button>
+    <button class="nav-tab" onclick="showPage('export')">📦 Export</button>
+  </div>
+  <div class="status-pill">
+    <div class="status-dot"></div>
+    <span class="status-txt" id="statusTxt">READY — SELECT RUN</span>
+  </div>
+</nav>
+
+<!-- MISSION BAR -->
+<div class="mission-bar">
+  <div>
+    <div class="mission-id" id="missionId">AQ_LAB_20260211_RUNA</div>
+    <div class="mission-meta">Device: <b>ESP32-LORA-01</b> &nbsp;|&nbsp; Location: <b>UW GIX Lab 203</b> &nbsp;|&nbsp; Container: <b>40 cm plastic bin</b></div>
+  </div>
+  <div class="run-btns">
+    <label>Test Run:</label>
+    <button class="run-btn active" id="rbA" onclick="switchRun('A')">Run A · Room Temp</button>
+    <button class="run-btn"        id="rbB" onclick="switchRun('B')">Run B · Cool Water</button>
+    <button class="run-btn"        id="rbC" onclick="switchRun('C')">Run C · Warm Water</button>
+  </div>
+  <div class="spacer"></div>
+  <div class="owner-tag">👤 Victoria Yang</div>
+  <button class="btn btn-primary" onclick="replay()">▶ Replay</button>
+</div>
+
+<!-- ALERT -->
+<div class="alert-bar a-ok" id="alertBar">✅ System nominal — GPS: NO FIX (indoor lab — expected) — press ▶ Replay to stream data</div>
+
+<!-- ===== LIVE VIEW ===== -->
+<div id="page-live" class="page active">
+<div class="live-layout">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="card">
+      <div class="card-title">Live Readings</div>
+      <div class="mm"><span class="mm-label">💧 Depth (m)</span>      <span class="mm-val" id="sDepth">—</span></div>
+      <div class="mm"><span class="mm-label">🌡 Temp (°C)</span>       <span class="mm-val" id="sTemp">—</span></div>
+      <div class="mm"><span class="mm-label">📊 Pressure (mbar)</span> <span class="mm-val" id="sPres">—</span></div>
+      <div class="mm"><span class="mm-label">↕ dP (mbar)</span>        <span class="mm-val" id="sDp">—</span></div>
+      <div class="mm"><span class="mm-label">🌊 NTU</span>              <span class="mm-val" id="sNtu">—</span></div>
+      <div class="mm"><span class="mm-label">⚡ Turb Vavg (V)</span>   <span class="mm-val" id="sVavg">—</span></div>
+      <div class="mm"><span class="mm-label">🔋 Battery (V)</span>     <span class="mm-val mm-ok">3.82</span></div>
+      <div class="mm"><span class="mm-label">📍 GPS</span>              <span class="mm-val mm-warn">NO FIX</span></div>
+      <div class="mm"><span class="mm-label">🛰 Satellites</span>       <span class="mm-val">0</span></div>
+      <div class="mm"><span class="mm-label">🔁 Loop #</span>           <span class="mm-val" id="sLoop">0</span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Actuation</div>
+      <div class="mm"><span class="mm-label">Servo Motor</span>  <span class="mm-val" id="sServo">OPEN</span></div>
+      <div class="mm"><span class="mm-label">Air Valve</span>    <span class="mm-val" id="sValve">OFF</span></div>
+      <div class="mm"><span class="mm-label">Mode</span>         <span class="mm-val" id="sMode">AIR</span></div>
+      <div class="mm"><span class="mm-label">State</span>        <span class="mm-val" id="sState">IDLE</span></div>
+      <div class="mm"><span class="mm-label">Samples</span>      <span class="mm-val" id="sSamples">0 / 2</span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Sensor Health</div>
+      <div class="srow"><span class="srow-name">MS5837 (I²C 0x76)</span>    <span class="sbadge bok">OK</span></div>
+      <div class="srow"><span class="srow-name">SEN0189 Turb (ADC34)</span>  <span class="sbadge bok">OK</span></div>
+      <div class="srow"><span class="srow-name">NEO-6M GPS (UART)</span>     <span class="sbadge bwarn">NO FIX</span></div>
+      <div class="srow"><span class="srow-name">ESP32 LoRa (SX1276)</span>   <span class="sbadge bok">−91 dBm</span></div>
+      <div class="srow"><span class="srow-name">Air Valve (Relay)</span>      <span class="sbadge bok">STANDBY</span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Test Condition</div>
+      <div style="margin-bottom:8px;" id="condBadgeEl"><span class="cond-badge cond-room">🌡 Room Temp (~22°C)</span></div>
+      <div class="mm"><span class="mm-label">Water Source</span>   <span style="font-size:11px;font-weight:600;" id="condSrc">Tap water, 1 hr settled</span></div>
+      <div class="mm"><span class="mm-label">Container</span>      <span style="font-size:11px;font-weight:600;">40 cm plastic bin</span></div>
+      <div class="mm"><span class="mm-label">Max depth target</span><span style="font-size:11px;font-weight:600;">35 cm</span></div>
+      <div class="mm"><span class="mm-label">Ambient temp</span>   <span style="font-size:11px;font-weight:600;" id="condAmb">23.1°C</span></div>
+    </div>
+  </div>
+
+  <!-- CHARTS AREA -->
+  <div class="charts">
+
+    <!-- PHASE TIMELINE -->
+    <div class="card" style="padding:9px 13px;">
+      <div class="card-title" style="margin-bottom:5px;">Mission Phase</div>
+      <div class="timeline">
+        <div class="phase ph-done"   id="ph0">INIT</div>
+        <div class="phase ph-done"   id="ph1">READY</div>
+        <div class="phase ph-future" id="ph2">DESCENT</div>
+        <div class="phase ph-future" id="ph3">SAMPLING</div>
+        <div class="phase ph-future" id="ph4">SURFACING</div>
+        <div class="phase ph-future" id="ph5">COMPLETE</div>
+      </div>
+    </div>
+
+    <!-- SUMMARY METRICS -->
+    <div class="metric-row">
+      <div class="metric-card"><div class="metric-val" id="mMaxDepth">—</div><div class="metric-unit">m</div><div class="metric-label">Max Depth</div></div>
+      <div class="metric-card"><div class="metric-val" id="mMinTemp">—</div><div class="metric-unit">°C</div><div class="metric-label">Min Temp</div></div>
+      <div class="metric-card"><div class="metric-val" id="mAvgNtu">—</div><div class="metric-unit">NTU</div><div class="metric-label">Avg Turbidity</div></div>
+      <div class="metric-card"><div class="metric-val" id="mMaxPres">—</div><div class="metric-unit">mbar</div><div class="metric-label">Max Pressure</div></div>
+      <div class="metric-card"><div class="metric-val" id="mLoops">0</div><div class="metric-unit">loops</div><div class="metric-label">Loops Run</div></div>
+      <div class="metric-card"><div class="metric-val" id="mSamples">0</div><div class="metric-unit">/ 2</div><div class="metric-label">Samples</div></div>
+    </div>
+
+    <!-- CHART ROW 1 -->
+    <div class="chart-row">
+      <div class="chart-card"><h3>Depth (m) — time series</h3><div class="chart-wrap"><canvas id="cDepth"></canvas></div></div>
+      <div class="chart-card"><h3>Temperature (°C) — time series</h3><div class="chart-wrap"><canvas id="cTemp"></canvas></div></div>
+    </div>
+
+    <!-- CHART ROW 2 -->
+    <div class="chart-row">
+      <div class="chart-card"><h3>Turbidity NTU — time series</h3><div class="chart-wrap"><canvas id="cTurb"></canvas></div></div>
+      <div class="chart-card"><h3>Pressure (mbar) — time series</h3><div class="chart-wrap"><canvas id="cPres"></canvas></div></div>
+    </div>
+
+    <!-- SAMPLE LOG TABLE -->
+    <div class="log-wrap">
+      <div class="log-hdr">
+        <span class="log-hdr-title">Sample Event Log</span>
+        <span class="owner-tag">Victoria Yang</span>
+      </div>
+      <div class="log-scroll">
+        <table class="log-table">
+          <thead>
+            <tr><th>#</th><th>Elapsed</th><th>Depth m</th><th>Temp °C</th><th>P mbar</th><th>dP</th><th>Vavg V</th><th>NTU</th><th>Mode</th><th>State</th><th>Servo</th><th>Valve</th></tr>
+          </thead>
+          <tbody id="logBody"><tr><td colspan="12" style="text-align:center;padding:18px;color:var(--light-slate);">Press ▶ Replay to stream data</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+</div>
+
+<!-- ===== SERIAL LOG ===== -->
+<div id="page-serial" class="page">
+<div class="serial-wrap">
+  <div class="serial-hdr">
+    <h2>ESP32 Serial Monitor</h2>
+    <span class="serial-meta">Baud: 115200 | Port: /dev/ttyUSB0 | Board: ESP32 NodeMCU-32S | FW: AquaCast v0.3</span>
+    <div class="run-tabs">
+      <button class="rtab active" id="stA" onclick="switchSerialRun('A')">Run A — Room Temp</button>
+      <button class="rtab"        id="stB" onclick="switchSerialRun('B')">Run B — Cool Water</button>
+      <button class="rtab"        id="stC" onclick="switchSerialRun('C')">Run C — Warm Water</button>
+    </div>
+    <div class="owner-tag">Victoria Yang</div>
+  </div>
+  <div class="serial-box" id="serialBox"></div>
+  <div class="serial-sum">
+    <div class="sum-card"><div class="sum-val" id="sumLoops">—</div><div class="sum-lbl">Total Loops</div></div>
+    <div class="sum-card"><div class="sum-val" id="sumDepth">—</div><div class="sum-lbl">Max Depth (m)</div></div>
+    <div class="sum-card"><div class="sum-val" id="sumTemp">—</div><div class="sum-lbl">Avg Temp (°C)</div></div>
+    <div class="sum-card"><div class="sum-val" id="sumNtu">—</div><div class="sum-lbl">Avg NTU</div></div>
+  </div>
+</div>
+</div>
+
+<!-- ===== CONFIG ===== -->
+<div id="page-config" class="page">
+<div class="config-wrap">
+  <div>
+    <div class="card">
+      <div class="card-title">Mission Configuration</div>
+      <div class="form-group">
+        <label>Mission ID</label>
+        <input class="form-ctrl" id="cId" value="AQ_LAB_20260211_001"/>
+      </div>
+      <div class="form-group">
+        <label>Target Depth 1 (m) — max 0.40 m lab</label>
+        <input class="form-ctrl" type="number" id="cD1" value="0.20" min="0.05" max="0.40" step="0.01" oninput="refreshJSON()"/>
+      </div>
+      <div class="form-group">
+        <label>Target Depth 2 (m)</label>
+        <input class="form-ctrl" type="number" id="cD2" value="0.35" min="0.05" max="0.40" step="0.01" oninput="refreshJSON()"/>
+      </div>
+      <div class="form-group">
+        <label>Sampling Rate (Hz)</label>
+        <input class="form-ctrl" type="number" id="cRate" value="1" min="0.5" max="5" step="0.5" oninput="refreshJSON()"/>
+      </div>
+      <div class="form-group">
+        <label>Logging Interval (ms)</label>
+        <input class="form-ctrl" type="number" id="cInt" value="1000" oninput="refreshJSON()"/>
+      </div>
+      <div class="form-group">
+        <label>Enabled Sensors</label>
+        <div class="checkbox-grid">
+          <label><input type="checkbox" id="cGps"   checked onchange="refreshJSON()"> GPS (NEO-6M)</label>
+          <label><input type="checkbox" id="cDep"   checked onchange="refreshJSON()"> Depth/Temp (MS5837)</label>
+          <label><input type="checkbox" id="cTurb2" checked onchange="refreshJSON()"> Turbidity (SEN0189)</label>
+          <label><input type="checkbox" id="cLora"         onchange="refreshJSON()"> LoRa TX</label>
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="doUpload()">📤 Upload to ESP32</button>
+      <span id="upStatus" style="font-size:11px;margin-left:10px;color:var(--light-slate);"></span>
+    </div>
+  </div>
+  <div>
+    <div class="card" style="height:100%;">
+      <div class="card-title">JSON Preview — mission-profile.json</div>
+      <div class="json-box" id="jsonBox"></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ===== EXPORT ===== -->
+<div id="page-export" class="page">
+<div class="export-wrap">
+  <div class="exp-card">
+    <h3>CSV — All 3 Runs <span class="owner-tag" style="font-size:10px;margin-left:4px;">Victoria Yang</span></h3>
+    <p>All lab runs (A, B, C) in one CSV. Columns match the exact ESP32 serial output schema from AquaCast firmware.</p>
+    <button class="btn btn-primary" onclick="doCSV()">⬇ Download CSV</button>
+  </div>
+  <div class="exp-card">
+    <h3>JSON — All 3 Runs</h3>
+    <p>Full structured JSON matching the ESP32 LoRa data packet format. Parseable by Python / MATLAB directly.</p>
+    <button class="btn btn-outline" onclick="doJSON()">⬇ Download JSON</button>
+  </div>
+  <div class="exp-card">
+    <h3>Per-Run CSV <span class="stub-badge">STUB</span></h3>
+    <p>Individual CSVs per run with metadata headers. Pending lab CSV template from Chang Li.</p>
+    <button class="btn btn-outline" disabled>Coming soon</button>
+  </div>
+  <div class="exp-card">
+    <h3>Lab Format Export <span class="stub-badge">STUB</span></h3>
+    <p>Partner lab-compatible CSV. Format pending alignment with external partner schema.</p>
+    <button class="btn btn-outline" disabled>Coming soon</button>
+  </div>
+</div>
+</div>
+
+<script>
+// ================================================================
+//  SYNTHETIC LAB DATA
+//  Format matches: sensors/integration/esp32lora_gps_depth_turbidity
+//  Owner: Victoria Yang | UW GIX Lab 203 | 2026-02-11
+//
+//  Columns: [elapsed_ms, depth_m, temp_c, pressure_mbar, dp_mbar,
+//            turb_vavg_v, turb_raw_adc, ntu_est, mode,
+//            mission_state, servo, valve]
+// ================================================================
+const RUNS = {
+  A: {
+    id:'AQ_LAB_20260211_RUNA', label:'Run A — Room Temp',
+    cond:'🌡 Room Temp (~22°C)', condCls:'cond-room',
+    src:'Tap water, 1 hr settled', amb:'23.1°C', t0:'14:22:07',
+    rows:[
+      [ 1033,0.000,22.8,1013.1, 0.1,0.714,887,18.3,'AIR','INIT','OPEN','OFF'],
+      [ 2018,0.000,22.8,1013.2, 0.1,0.712,885,18.1,'AIR','READY','OPEN','OFF'],
+      [ 3024,0.000,22.9,1013.1, 0.0,0.713,886,18.2,'AIR','READY','OPEN','OFF'],
+      [ 4011,0.003,22.7,1013.4, 0.3,0.718,892,20.1,'WATER','DESCENT','OPEN','OFF'],
+      [ 5009,0.042,22.6,1017.3, 3.9,0.723,898,22.8,'WATER','DESCENT','OPEN','OFF'],
+      [ 6014,0.088,22.5,1021.9, 4.6,0.728,904,25.1,'WATER','DESCENT','OPEN','OFF'],
+      [ 7022,0.135,22.4,1026.3, 4.4,0.732,909,27.4,'WATER','DESCENT','OPEN','OFF'],
+      [ 8031,0.181,22.3,1030.8, 4.5,0.736,914,29.3,'WATER','DESCENT','OPEN','OFF'],
+      [ 9018,0.201,22.2,1032.8, 2.0,0.739,918,30.6,'WATER','SAMPLING','OPEN','OFF'],
+      [10034,0.204,22.2,1033.1, 0.3,0.740,919,30.8,'WATER','SAMPLING','OPEN','OFF'],
+      [11019,0.205,22.2,1033.2, 0.1,0.740,919,30.9,'WATER','SAMPLING','CLOSED','OFF'],
+      [12008,0.205,22.1,1033.2, 0.0,0.739,918,30.8,'WATER','SAMPLING','CLOSED','OFF'],
+      [13022,0.248,22.0,1037.4, 4.2,0.742,922,32.0,'WATER','DESCENT','CLOSED','OFF'],
+      [14011,0.297,21.9,1041.9, 4.5,0.744,924,33.2,'WATER','DESCENT','CLOSED','OFF'],
+      [15027,0.348,21.8,1047.0, 5.1,0.746,927,34.1,'WATER','DESCENT','CLOSED','OFF'],
+      [16033,0.361,21.8,1048.3, 1.3,0.747,928,34.4,'WATER','SAMPLING','CLOSED','INFLATE'],
+      [17014,0.362,21.7,1048.4, 0.1,0.747,928,34.4,'WATER','SAMPLING','CLOSED','INFLATE'],
+      [18009,0.361,21.7,1048.3,-0.1,0.747,928,34.4,'WATER','SAMPLING','CLOSED','INFLATE'],
+      [19031,0.319,21.8,1044.4,-3.9,0.745,925,33.6,'WATER','SURFACING','CLOSED','INFLATE'],
+      [20018,0.264,21.9,1039.1,-5.3,0.742,922,32.4,'WATER','SURFACING','CLOSED','INFLATE'],
+      [21022,0.198,22.0,1032.6,-6.5,0.739,918,30.7,'WATER','SURFACING','CLOSED','INFLATE'],
+      [22015,0.129,22.1,1025.8,-6.8,0.733,910,27.9,'WATER','SURFACING','CLOSED','INFLATE'],
+      [23011,0.061,22.2,1018.9,-6.9,0.727,903,24.4,'WATER','SURFACING','CLOSED','OFF'],
+      [24009,0.008,22.3,1013.8,-5.1,0.714,887,18.8,'AIR','SURFACING','CLOSED','OFF'],
+      [25014,0.001,22.4,1013.2,-0.6,0.712,884,18.1,'AIR','COMPLETE','CLOSED','OFF'],
+      [26007,0.000,22.4,1013.1,-0.1,0.711,883,18.0,'AIR','COMPLETE','CLOSED','OFF'],
+    ]
+  },
+  B: {
+    id:'AQ_LAB_20260211_RUNB', label:'Run B — Cool Water',
+    cond:'❄ Cool Water (~13°C)', condCls:'cond-cool',
+    src:'Tap water + 800 g ice', amb:'23.1°C', t0:'14:49:33',
+    rows:[
+      [ 1021,0.000,13.4,1013.0, 0.0,0.711,883,18.0,'AIR','INIT','OPEN','OFF'],
+      [ 2009,0.000,13.4,1013.1, 0.1,0.712,884,18.1,'AIR','READY','OPEN','OFF'],
+      [ 3031,0.000,13.3,1013.0, 0.0,0.711,883,18.0,'AIR','READY','OPEN','OFF'],
+      [ 4017,0.004,13.2,1013.5, 0.5,0.716,889,19.8,'WATER','DESCENT','OPEN','OFF'],
+      [ 5022,0.049,13.1,1017.9, 4.4,0.721,895,22.2,'WATER','DESCENT','OPEN','OFF'],
+      [ 6014,0.097,12.9,1022.6, 4.7,0.726,901,24.3,'WATER','DESCENT','OPEN','OFF'],
+      [ 7028,0.143,12.8,1027.1, 4.5,0.730,906,26.4,'WATER','DESCENT','OPEN','OFF'],
+      [ 8011,0.188,12.7,1031.4, 4.3,0.733,910,28.2,'WATER','DESCENT','OPEN','OFF'],
+      [ 9033,0.197,12.7,1032.3, 0.9,0.734,912,28.7,'WATER','SAMPLING','OPEN','OFF'],
+      [10008,0.198,12.6,1032.4, 0.1,0.734,912,28.8,'WATER','SAMPLING','OPEN','OFF'],
+      [11019,0.198,12.6,1032.4, 0.0,0.735,913,28.9,'WATER','SAMPLING','CLOSED','OFF'],
+      [12007,0.199,12.6,1032.5, 0.1,0.735,913,28.9,'WATER','SAMPLING','CLOSED','OFF'],
+      [13022,0.244,12.5,1036.8, 4.3,0.738,917,30.3,'WATER','DESCENT','CLOSED','OFF'],
+      [14018,0.289,12.5,1041.2, 4.4,0.741,920,31.6,'WATER','DESCENT','CLOSED','OFF'],
+      [15011,0.328,12.4,1044.9, 3.7,0.743,923,32.6,'WATER','DESCENT','CLOSED','OFF'],
+      [16029,0.337,12.4,1045.8, 0.9,0.744,924,32.8,'WATER','SAMPLING','CLOSED','INFLATE'],
+      [17013,0.337,12.3,1045.8, 0.0,0.744,924,32.8,'WATER','SAMPLING','CLOSED','INFLATE'],
+      [18021,0.338,12.3,1045.9, 0.1,0.744,924,32.9,'WATER','SAMPLING','CLOSED','INFLATE'],
+      [19009,0.291,12.4,1041.3,-4.6,0.741,920,31.7,'WATER','SURFACING','CLOSED','INFLATE'],
+      [20031,0.231,12.5,1035.2,-6.1,0.738,917,30.4,'WATER','SURFACING','CLOSED','INFLATE'],
+      [21017,0.164,12.7,1028.5,-6.7,0.733,910,28.5,'WATER','SURFACING','CLOSED','INFLATE'],
+      [22022,0.094,12.8,1022.2,-6.3,0.727,903,25.8,'WATER','SURFACING','CLOSED','OFF'],
+      [23019,0.029,12.9,1015.8,-6.4,0.715,888,19.4,'AIR','SURFACING','CLOSED','OFF'],
+      [24011,0.002,13.1,1013.3,-2.5,0.712,885,18.1,'AIR','COMPLETE','CLOSED','OFF'],
+      [25008,0.000,13.2,1013.1,-0.2,0.711,883,18.0,'AIR','COMPLETE','CLOSED','OFF'],
+    ]
+  },
+  C: {
+    id:'AQ_LAB_20260211_RUNC', label:'Run C — Warm Water',
+    cond:'🔥 Warm Water (~31°C)', condCls:'cond-warm',
+    src:'Tap water + kettle boiled', amb:'23.2°C', t0:'15:18:55',
+    rows:[
+      [ 1018,0.000,30.8,1013.0, 0.0,0.712,884,18.1,'AIR','INIT','OPEN','OFF'],
+      [ 2031,0.000,30.9,1013.1, 0.1,0.712,884,18.1,'AIR','READY','OPEN','OFF'],
+      [ 3009,0.000,30.8,1013.0, 0.0,0.711,883,18.0,'AIR','READY','OPEN','OFF'],
+      [ 4022,0.005,30.7,1013.6, 0.6,0.718,892,20.1,'WATER','DESCENT','OPEN','OFF'],
+      [ 5014,0.051,30.5,1018.1, 4.5,0.724,899,22.9,'WATER','DESCENT','OPEN','OFF'],
+      [ 6027,0.099,30.3,1022.7, 4.6,0.728,905,24.9,'WATER','DESCENT','OPEN','OFF'],
+      [ 7019,0.146,30.1,1027.4, 4.7,0.732,909,26.9,'WATER','DESCENT','OPEN','OFF'],
+      [ 8011,0.191,29.9,1031.8, 4.4,0.735,913,28.5,'WATER','DESCENT','OPEN','OFF'],
+      [ 9024,0.202,29.8,1032.9, 1.1,0.736,915,29.1,'WATER','SAMPLING','OPEN','OFF'],
+      [10016,0.203,29.8,1033.0, 0.1,0.736,915,29.2,'WATER','SAMPLING','OPEN','OFF'],
+      [11009,0.203,29.7,1033.0, 0.0,0.737,916,29.3,'WATER','SAMPLING','CLOSED','OFF'],
+      [12031,0.204,29.7,1033.1, 0.1,0.737,916,29.4,'WATER','SAMPLING','CLOSED','OFF'],
+      [13018,0.249,29.6,1037.5, 4.4,0.740,920,30.7,'WATER','DESCENT','CLOSED','OFF'],
+      [14011,0.293,29.4,1041.7, 4.2,0.742,922,31.8,'WATER','DESCENT','CLOSED','OFF'],
+      [15024,0.319,29.2,1044.3, 2.6,0.744,924,32.5,'WATER','SAMPLING','CLOSED','INFLATE'],
+      [16013,0.320,29.1,1044.4, 0.1,0.744,924,32.6,'WATER','SAMPLING','CLOSED','INFLATE'],
+      [17022,0.320,29.1,1044.4, 0.0,0.744,924,32.6,'WATER','SAMPLING','CLOSED','INFLATE'],
+      [18009,0.321,29.0,1044.5, 0.1,0.744,924,32.7,'WATER','SAMPLING','CLOSED','INFLATE'],
+      [19031,0.277,29.1,1040.3,-4.2,0.742,922,31.9,'WATER','SURFACING','CLOSED','INFLATE'],
+      [20017,0.221,29.3,1034.7,-5.6,0.738,917,30.6,'WATER','SURFACING','CLOSED','INFLATE'],
+      [21022,0.158,29.5,1028.5,-6.2,0.734,912,28.7,'WATER','SURFACING','CLOSED','INFLATE'],
+      [22014,0.088,29.7,1021.6,-6.9,0.728,905,25.8,'WATER','SURFACING','CLOSED','OFF'],
+      [23009,0.022,29.9,1015.1,-6.5,0.715,888,19.3,'AIR','SURFACING','CLOSED','OFF'],
+      [24021,0.001,30.1,1013.2,-1.9,0.712,884,18.1,'AIR','COMPLETE','CLOSED','OFF'],
+      [25013,0.000,30.2,1013.1,-0.1,0.711,883,18.0,'AIR','COMPLETE','CLOSED','OFF'],
+    ]
+  }
+};
+
+// ================================================================
+//  GLOBALS
+// ================================================================
+let activeRun = 'A';
+let timer = null;
+let idx = 0;
+let charts = {};
+
+// ================================================================
+//  PAGE NAV
+// ================================================================
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  const labels = ['live','serial','config','export'];
+  document.querySelectorAll('.nav-tab').forEach((t,i) => t.classList.toggle('active', labels[i] === name));
+  if (name === 'serial') renderSerial(activeRun);
+  if (name === 'config') refreshJSON();
+}
+
+// ================================================================
+//  RUN SWITCHING
+// ================================================================
+function switchRun(r) {
+  activeRun = r;
+  if (timer) { clearInterval(timer); timer = null; }
+  ['A','B','C'].forEach(x => document.getElementById('rb'+x).classList.toggle('active', x === r));
+  const R = RUNS[r];
+  document.getElementById('missionId').textContent = R.id;
+  document.getElementById('statusTxt').textContent = 'READY — ' + R.label.toUpperCase();
+  document.getElementById('condBadgeEl').innerHTML = `<span class="cond-badge ${R.condCls}">${R.cond}</span>`;
+  document.getElementById('condSrc').textContent = R.src;
+  document.getElementById('condAmb').textContent = R.amb;
+  clearCharts();
+  resetSidebar();
+  document.getElementById('logBody').innerHTML = '<tr><td colspan="12" style="text-align:center;padding:18px;color:var(--light-slate);">Press ▶ Replay to stream data</td></tr>';
+}
+
+// ================================================================
+//  CHARTS
+// ================================================================
+function makeChart(id, color, yLabel, invertY) {
+  const ctx = document.getElementById(id).getContext('2d');
+  const cfg = {
+    type:'line',
+    data:{ labels:[], datasets:[{ data:[], borderColor:color, backgroundColor:color+'18',
+           borderWidth:2, pointRadius:2, tension:0.4, fill:true }] },
+    options:{
+      responsive:true, maintainAspectRatio:false, animation:false,
+      plugins:{ legend:{ display:false } },
+      scales:{
+        x:{ ticks:{ font:{size:9}, maxTicksLimit:8 }, grid:{ color:'rgba(0,0,0,.05)' } },
+        y:{ reverse: !!invertY,
+            title:{ display:true, text:yLabel, font:{size:9} },
+            ticks:{ font:{size:9} }, grid:{ color:'rgba(0,0,0,.05)' } }
+      }
+    }
+  };
+  return new Chart(ctx, cfg);
+}
+
+function initCharts() {
+  charts.depth = makeChart('cDepth', '#1C7293', 'm', true);
+  charts.temp  = makeChart('cTemp',  '#00A896', '°C');
+  charts.turb  = makeChart('cTurb',  '#F59E0B', 'NTU');
+  charts.pres  = makeChart('cPres',  '#065A82', 'mbar');
+}
+
+function clearCharts() {
+  Object.values(charts).forEach(c => {
+    c.data.labels = []; c.data.datasets[0].data = []; c.update('none');
+  });
+}
+
+function pushChart(label, d, t, n, p) {
+  const MAX = 35;
+  [[charts.depth, d],[charts.temp, t],[charts.turb, n],[charts.pres, p]].forEach(([c, v]) => {
+    c.data.labels.push(label); c.data.datasets[0].data.push(v);
+    if (c.data.labels.length > MAX) { c.data.labels.shift(); c.data.datasets[0].data.shift(); }
+    c.update('none');
+  });
+}
+
+// ================================================================
+//  REPLAY
+// ================================================================
+function replay() {
+  if (timer) { clearInterval(timer); timer = null; }
+  clearCharts();
+  resetSidebar();
+  document.getElementById('logBody').innerHTML = '';
+  idx = 0;
+  const R = RUNS[activeRun];
+  document.getElementById('statusTxt').textContent = 'STREAMING — ' + R.label.toUpperCase();
+
+  timer = setInterval(() => {
+    if (idx >= R.rows.length) {
+      clearInterval(timer); timer = null;
+      document.getElementById('statusTxt').textContent = 'COMPLETE — ' + R.label;
+      setAlert('ok', '✅ Run complete — ' + R.rows.length + ' loops logged — max depth ' + Math.max(...R.rows.map(r=>r[1])).toFixed(3) + ' m');
+      setPhase('COMPLETE');
+      return;
+    }
+    const row = R.rows[idx];
+    const [ms, depth, temp, pres, dp, vavg, raw, ntu, mode, state, servo, valve] = row;
+    const isSampleTrigger = idx > 0 && servo === 'CLOSED' && R.rows[idx-1][10] === 'OPEN';
+    const loop = idx + 1;
+
+    // Sidebar live readings
+    document.getElementById('sDepth').textContent = depth.toFixed(3) + ' m';
+    document.getElementById('sTemp').textContent  = temp.toFixed(1) + ' °C';
+    document.getElementById('sPres').textContent  = pres.toFixed(1) + ' mbar';
+    document.getElementById('sDp').textContent    = (dp >= 0 ? '+' : '') + dp.toFixed(1);
+    document.getElementById('sNtu').textContent   = ntu.toFixed(1) + ' NTU';
+    document.getElementById('sVavg').textContent  = vavg.toFixed(3) + ' V';
+    document.getElementById('sLoop').textContent  = loop;
+    document.getElementById('sMode').textContent  = mode;
+    document.getElementById('sState').textContent = state;
+    document.getElementById('sServo').textContent = servo;
+    document.getElementById('sServo').className   = 'mm-val ' + (servo === 'CLOSED' ? 'mm-warn' : 'mm-ok');
+    document.getElementById('sValve').textContent = valve;
+    document.getElementById('sValve').className   = 'mm-val ' + (valve !== 'OFF' ? 'mm-warn' : '');
+
+    // Count sample triggers
+    let scnt = 0;
+    for (let i = 1; i <= idx; i++) if (R.rows[i][10] === 'CLOSED' && R.rows[i-1][10] === 'OPEN') scnt++;
+    document.getElementById('sSamples').textContent = scnt + ' / 2';
+    document.getElementById('mSamples').textContent = scnt;
+    document.getElementById('mLoops').textContent = loop;
+
+    // Summary metrics
+    const allD = R.rows.slice(0, idx+1).map(r => r[1]);
+    const allT = R.rows.slice(0, idx+1).map(r => r[2]);
+    const allN = R.rows.slice(0, idx+1).map(r => r[7]);
+    const allP = R.rows.slice(0, idx+1).map(r => r[3]);
+    document.getElementById('mMaxDepth').textContent = Math.max(...allD).toFixed(3);
+    document.getElementById('mMinTemp').textContent  = Math.min(...allT).toFixed(1);
+    document.getElementById('mAvgNtu').textContent   = (allN.reduce((a,b)=>a+b,0)/allN.length).toFixed(1);
+    document.getElementById('mMaxPres').textContent  = Math.max(...allP).toFixed(1);
+
+    // Phase
+    setPhase(state);
+
+    // Alert
+    if (depth > 0.38) setAlert('warn', '⚠ Depth nearing container limit — ' + (depth*100).toFixed(0) + ' cm');
+    else if (state === 'SAMPLING') setAlert('ok', '✅ SAMPLING at ' + depth.toFixed(3) + ' m — ' + temp.toFixed(1) + '°C — ' + ntu.toFixed(1) + ' NTU');
+    else if (isSampleTrigger) setAlert('ok', '✅ Sample triggered — servo CLOSED — chamber sealed');
+    else setAlert('ok', '✅ ' + state + ' | depth ' + depth.toFixed(3) + ' m | loop ' + loop);
+
+    // Chart
+    pushChart((ms/1000).toFixed(1) + 's', depth, temp, ntu, pres);
+
+    // Table row
+    const tb = document.getElementById('logBody');
+    const tr = document.createElement('tr');
+    if (isSampleTrigger) tr.className = 'log-sample';
+    tr.innerHTML = `
+      <td>${loop}</td>
+      <td style="color:#58a6ff;font-family:monospace">${(ms/1000).toFixed(3)}s</td>
+      <td>${depth.toFixed(3)}</td>
+      <td>${temp.toFixed(1)}</td>
+      <td>${pres.toFixed(1)}</td>
+      <td>${(dp>=0?'+':'')+dp.toFixed(1)}</td>
+      <td>${vavg.toFixed(3)}</td>
+      <td>${ntu.toFixed(1)}</td>
+      <td>${mode}</td>
+      <td style="${state==='SAMPLING'?'color:var(--seafoam);font-weight:700':''}">${state}</td>
+      <td class="${isSampleTrigger?'sample-mark':''}">${servo}</td>
+      <td>${valve}</td>`;
+    tb.appendChild(tr);
+    tb.parentElement.parentElement.scrollTop = 9999;
+
+    idx++;
+  }, 550);
+}
+
+const PHASE_MAP = { INIT:0, READY:1, DESCENT:2, SAMPLING:3, SURFACING:4, COMPLETE:5 };
+function setPhase(state) {
+  const n = PHASE_MAP[state] ?? 0;
+  for (let i = 0; i < 6; i++) {
+    const el = document.getElementById('ph' + i);
+    el.className = 'phase ' + (i < n ? 'ph-done' : i === n ? 'ph-active' : 'ph-future');
+  }
+}
+
+function resetSidebar() {
+  ['sDepth','sTemp','sPres','sDp','sNtu','sVavg','sLoop'].forEach(id => document.getElementById(id).textContent = '—');
+  document.getElementById('sSamples').textContent = '0 / 2';
+  document.getElementById('sMode').textContent = 'AIR';
+  document.getElementById('sState').textContent = 'IDLE';
+  document.getElementById('sServo').textContent = 'OPEN';
+  document.getElementById('sValve').textContent = 'OFF';
+  ['mMaxDepth','mMinTemp','mAvgNtu','mMaxPres'].forEach(id => document.getElementById(id).textContent = '—');
+  document.getElementById('mLoops').textContent = '0';
+  document.getElementById('mSamples').textContent = '0';
+  setPhase('INIT');
+  setAlert('ok', '✅ System nominal — GPS: NO FIX (indoor lab, expected) — press ▶ Replay');
+}
+
+function setAlert(type, msg) {
+  const el = document.getElementById('alertBar');
+  el.className = 'alert-bar ' + { ok:'a-ok', warn:'a-warn', err:'a-err' }[type];
+  el.textContent = msg;
+}
+
+// ================================================================
+//  SERIAL LOG RENDERER
+// ================================================================
+function renderSerial(run) {
+  const R = RUNS[run];
+  const [h0, m0, s0] = R.t0.split(':').map(Number);
+  const base = (h0*3600 + m0*60 + s0) * 1000;
+
+  let html = `<span class="sh">AquaCast Firmware v0.3 — ESP32 NodeMCU-32S<br>`;
+  html += `Baud: 115200 | GPIO34: ADC turbidity (11 dB attenuation)<br>`;
+  html += `I2C scan: MS5837 @ 0x76 ✓  |  GPS UART: NEO-6M @ 9600 baud ✓<br>`;
+  html += `ADC: SEN0189 analog turbidity ✓  |  LoRa SX1276: 915 MHz, init OK ✓<br>`;
+  html += `─────────────────────────────────────────────────────────────────<br>`;
+  html += `Test condition: ${R.cond}<br>`;
+  html += `Water source: ${R.src}<br>`;
+  html += `Container: 40 cm plastic bin  |  Max depth target: 35 cm<br>`;
+  html += `Start time: ${R.t0}<br>`;
+  html += `─────────────────────────────────────────────────────────────────<br><br></span>`;
+
+  R.rows.forEach((row, i) => {
+    const [ms, depth, temp, pres, dp, vavg, raw, ntu, mode, state, servo, valve] = row;
+    const abs = base + ms;
+    const hh  = String(Math.floor(abs/3600000)%24).padStart(2,'0');
+    const mm  = String(Math.floor((abs%3600000)/60000)).padStart(2,'0');
+    const ss  = String(Math.floor((abs%60000)/1000)).padStart(2,'0');
+    const ms3 = String(abs%1000).padStart(3,'0');
+    const ts  = `${hh}:${mm}:${ss}.${ms3}`;
+    const dpS = (dp >= 0 ? '+' : '') + dp.toFixed(1);
+    const isTrig = i > 0 && servo === 'CLOSED' && R.rows[i-1][10] === 'OPEN';
+
+    html += `<span class="st">${ts}</span> <span class="sa">-></span> `;
+    html += `<span class="sk">Depth(m):</span> <span class="sv">${depth.toFixed(3)}</span> <span class="ss">|</span> `;
+    html += `<span class="sk">Temp(C):</span> <span class="sv">${temp.toFixed(2)}</span> <span class="ss">|</span> `;
+    html += `<span class="sk">P(mbar):</span> <span class="sv">${pres.toFixed(1)}</span> <span class="ss">|</span> `;
+    html += `<span class="sk">dP:</span> <span class="sv">${dpS}</span> <span class="ss">|</span> `;
+    html += `<span class="sk">Mode:</span> <span class="sv">${mode}</span> <span class="ss">|</span> `;
+    html += `<span class="sk">Turb(Vavg):</span> <span class="sv">${vavg.toFixed(3)} V</span> <span class="ss">|</span> `;
+    html += `<span class="sk">RAW:</span> <span class="sv">${raw}</span> <span class="ss">|</span> `;
+    html += `<span class="sk">NTU(est):</span> <span class="sv">${ntu.toFixed(1)}</span> <span class="ss">|</span> `;
+    html += `<span class="sk">GPS:</span> <span class="sw">NO FIX</span> <span class="ss">|</span> `;
+    html += `<span class="sk">Sats:</span> <span class="sv">0</span> <span class="ss">|</span> `;
+    html += `<span class="sk">Servo:</span> <span class="sv">${servo}</span> <span class="ss">|</span> `;
+    html += `<span class="sk">Valve:</span> <span class="sv">${valve}</span> <span class="ss">|</span> `;
+    html += `<span class="sk">State:</span> <span class="sst">${state}</span>`;
+    if (isTrig) html += `  <span class="sm">*** SAMPLE TRIGGERED — servo CLOSED — chamber sealed ***</span>`;
+    html += `<br>`;
+  });
+
+  const depths = R.rows.map(r=>r[1]), temps = R.rows.map(r=>r[2]), ntus = R.rows.map(r=>r[7]);
+  const maxD = Math.max(...depths).toFixed(3);
+  const avgT = (temps.reduce((a,b)=>a+b,0)/temps.length).toFixed(2);
+  const avgN = (ntus.reduce((a,b)=>a+b,0)/ntus.length).toFixed(1);
+
+  html += `<br><span class="sh">─────────────────────────────────────────────────────────────────<br>`;
+  html += `RUN COMPLETE | Loops: ${R.rows.length} | Max depth: ${maxD} m | Avg temp: ${avgT} °C | Avg NTU: ${avgN}<br>`;
+  html += `GPS: NO FIX (indoor — expected) | LoRa: OK | I2C: OK | Battery: 3.82 V<br>`;
+  html += `─────────────────────────────────────────────────────────────────</span>`;
+
+  document.getElementById('serialBox').innerHTML = html;
+  document.getElementById('sumLoops').textContent = R.rows.length;
+  document.getElementById('sumDepth').textContent = maxD;
+  document.getElementById('sumTemp').textContent  = avgT;
+  document.getElementById('sumNtu').textContent   = avgN;
+}
+
+function switchSerialRun(r) {
+  ['A','B','C'].forEach(x => document.getElementById('st'+x).classList.toggle('active', x === r));
+  renderSerial(r);
+}
+
+// ================================================================
+//  CONFIG
+// ================================================================
+function refreshJSON() {
+  const obj = {
+    mission_id: document.getElementById('cId').value,
+    device_id: 'ESP32_LORA_01',
+    generated: new Date().toISOString(),
+    sampling_depths_m: [
+      parseFloat(document.getElementById('cD1').value),
+      parseFloat(document.getElementById('cD2').value)
+    ],
+    sampling_rate_hz: parseFloat(document.getElementById('cRate').value),
+    logging_interval_ms: parseInt(document.getElementById('cInt').value),
+    sensors: {
+      gps:      document.getElementById('cGps').checked,
+      depth_temp: document.getElementById('cDep').checked,
+      turbidity:  document.getElementById('cTurb2').checked,
+      lora_tx:    document.getElementById('cLora').checked
+    },
+    lab_mode: true,
+    max_depth_m: 0.40,
+    container: '40cm_plastic_bin',
+    owner: 'Victoria Yang'
+  };
+  document.getElementById('jsonBox').textContent = JSON.stringify(obj, null, 2);
+}
+
+function doUpload() {
+  const s = document.getElementById('upStatus');
+  s.style.color = 'var(--amber)'; s.textContent = '⏳ Uploading via USB serial...';
+  setTimeout(() => {
+    s.style.color = 'var(--green)'; s.textContent = '✅ Upload OK — ESP32 acknowledged — mission queued';
+  }, 1400);
+}
+
+// ================================================================
+//  EXPORT
+// ================================================================
+function doCSV() {
+  const hdr = 'run,run_label,loop,elapsed_ms,depth_m,temp_c,pressure_mbar,dp_mbar,mode,turb_vavg_v,turb_raw_adc,ntu_est,gps_fix,satellites,servo_state,valve_state,mission_state,sample_triggered';
+  const rows = [];
+  Object.entries(RUNS).forEach(([run, R]) => {
+    R.rows.forEach((row, i) => {
+      const [ms, depth, temp, pres, dp, vavg, raw, ntu, mode, state, servo, valve] = row;
+      const trig = i > 0 && servo === 'CLOSED' && R.rows[i-1][10] === 'OPEN';
+      rows.push(`${run},"${R.label}",${i+1},${ms},${depth.toFixed(3)},${temp.toFixed(2)},${pres.toFixed(1)},${dp.toFixed(1)},${mode},${vavg.toFixed(3)},${raw},${ntu.toFixed(1)},FALSE,0,${servo},${valve},${state},${trig}`);
+    });
+  });
+  dl(hdr + '\n' + rows.join('\n'), 'AquaCast_Lab_AllRuns_20260211.csv', 'text/csv');
+}
+
+function doJSON() {
+  const out = {};
+  Object.entries(RUNS).forEach(([run, R]) => {
+    out[run] = {
+      mission_id: R.id, label: R.label, condition: R.cond,
+      start_time: R.t0, device_id: 'ESP32_LORA_01',
+      location: 'UW GIX Lab 203', container: '40cm plastic bin',
+      owner: 'Victoria Yang', firmware: 'AquaCast v0.3',
+      samples: R.rows.map((row, i) => {
+        const [ms, depth, temp, pres, dp, vavg, raw, ntu, mode, state, servo, valve] = row;
+        return { loop:i+1, elapsed_ms:ms, depth_m:depth, temp_c:temp,
+                 pressure_mbar:pres, dp_mbar:dp, turb_vavg_v:vavg, turb_raw_adc:raw,
+                 ntu_est:ntu, mode, mission_state:state, servo_state:servo,
+                 valve_state:valve, gps_fix:false, satellites:0 };
+      })
+    };
+  });
+  dl(JSON.stringify(out, null, 2), 'AquaCast_Lab_AllRuns_20260211.json', 'application/json');
+}
+
+function dl(content, filename, type) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([content], { type }));
+  a.download = filename; a.click();
+}
+
+// ================================================================
+//  INIT
+// ================================================================
+window.onload = () => {
+  initCharts();
+  refreshJSON();
+  renderSerial('A');
+};
+</script>
+</body>
+</html>
