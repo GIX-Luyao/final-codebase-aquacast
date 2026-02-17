@@ -1,0 +1,7 @@
+{
+  id: "run_20260216_143022",
+  meta: { mission_name, date, location, water_body_type, weather, operator, notes, firmware, device_id },
+  config: { target_depths_m[], depth_schedule: [[time_s, depth_m], ...] },
+  rows: [ [elapsed_ms, depth_m, temp_c, pressure_mbar, dp_mbar, turb_v, turb_raw, ntu_est, mode, state, servo, valve], ... ],
+  summary: { duration_ms, loop_count, samples_triggered, max_depth_m, temp_range, turb_avg_ntu, gps_fix, phase_transitions[] }
+}
