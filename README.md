@@ -219,6 +219,12 @@ Victoria Yang (vicjny@uw.edu)
 
 ---
 
+## Instructor Name
+Ralph Stegner
+Dan Langis
+
+---
+
 ## License
 
 This project is developed for academic purposes as part of a university engineering course.
