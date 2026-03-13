@@ -220,8 +220,12 @@ Victoria Yang (vicjny@uw.edu)
 ---
 
 ## Instructor Name
-Ralph Stegner
-Dan Langis
+Ralph Stegner · Dan Langis
+
+---
+
+## Industrial sponsor
+Microsoft
 
 ---
 
