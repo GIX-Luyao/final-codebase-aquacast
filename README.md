@@ -1,189 +1,96 @@
+
 # AquaCast
 
-Data Collection for Ocean Monitoring
+Drone-Based Multi-Depth Water Sampling System for Ocean Monitoring
 
-Drone-Based Multi-Depth Water Sampling System
+AquaCast is a drone-deployed water sampling system designed to simplify environmental monitoring in lakes and other bodies of water. The system allows researchers to collect water samples at multiple depths during a single deployment, improving efficiency and reducing the need for manual boat-based sampling.
 
+This project was developed as part of the University of Washington Global Innovation Exchange (UWGIX) engineering capstone project.
+
+---
 
 ## Project Overview
 
-AquaCast is an autonomous water sampling system designed to simplify environmental monitoring in lakes and other bodies of water.
+Traditional water sampling requires researchers to travel to sampling locations by boat and manually collect samples at different depths. This process can be time-consuming, physically demanding, and sometimes unsafe. AquaCast addresses this problem by integrating a drone with an automated water sampling device. The system enables users to deploy the sampling device remotely and collect multiple water samples during a single mission.
 
-Traditional water sampling requires researchers to travel by boat and manually collect samples at different depths, which can be time-consuming and physically demanding.
-
-AquaCast integrates a drone with an automated underwater sampling device to collect multiple water samples during a single deployment.
-
-The system allows researchers to remotely deploy the device, collect samples at preset depths, and retrieve them efficiently.
-
-This system is designed for environmental researchers, water quality monitoring teams, and public health agencies who need an efficient and scalable sampling solution.
-
+---
 
 ## Key Features
 
 - Drone-based deployment of a water sampling device
 - Automatic multi-depth water sampling
-- Mission configuration through a digital dashboard
-- Organized storage of multiple water samples
-- Data logging during sampling missions
+- Multiple sample bottle storage
+- Prototype testing using Arduino control
 
+---
 
-## Project Structure
+## Repository Structure
 
-
-aquacast
+```
+final-codebase-aquacast
 │
-├── src/
-│ Main system source code
+├── arduino/
+│   Arduino code used for prototype testing
 │
 ├── docs/
-│ Documentation and user manual
-│
-├── assets/
-│ Images, diagrams, and project visuals
-│
-├── requirements.txt
-│ Python dependencies
+│   Project documentation and user manual
 │
 └── README.md
-Project documentation
+    Project description
+```
 
+---
 
+## Arduino Code
 
-## System Requirements
+The Arduino code used for the prototype air testing demo is located in:
 
+arduino/
 
-### Software
+This Arduino program controls the sampling device during prototype testing and demonstrates the triggering mechanism used for water sample collection.
 
-Python 3.9 or later
+To run the Arduino program:
 
-Supported operating systems:
+1. Open the .ino file using Arduino IDE.
+2. Connect the Arduino board to your computer.
+3. Select the correct board and port in Arduino IDE.
+4. Upload the program to the Arduino device.
 
-- Windows 10+
-- macOS
-- Ubuntu
-
-
-Required Python libraries are listed in:
-
-
-requirements.txt
-
-
-Install dependencies using:
-
-
-pip install -r requirements.txt
-
-
-
-### Hardware
-
-The AquaCast system requires:
-
-- Drone with payload capability
-- AquaCast water sampling device
-- Rechargeable battery pack
-- Sample bottles
-
-
-## Installation
-
-
-### Step 1 Clone the Repository
-
-
-git clone <[repository-url](https://github.com/GIX-Luyao/final-codebase-aquacast.git)>
-
-
-
-Navigate into the project directory:
-
-
-cd final-codebase-aquacast
-
-
-
-### Step 2 Install Dependencies
-
-
-pip install -r requirements.txt
-
-
-
-### Step 3 Prepare the System
-
-1. Assemble the sampling device
-
-2. Insert the sample bottles into the device
-
-3. Mount the device securely on the drone
-
-4. Power on the drone and the sampling device
-
-
-## Running the System
-
-Run the main control program:
-
-
-python src/main.py
-
-
-The system will initialize the drone connection and prepare the sampling mission.
-
+---
 
 ## Expected System Behavior
 
-After executing the program, the system will:
+After uploading the Arduino program and powering the device, the system will:
 
-- Initialize communication with the drone
-- Load mission parameters
-- Deploy the sampling device
-- Collect water samples at predefined depths
-- Record mission data
-- Return the device to the surface for retrieval
+1. Initialize the sampling control system.
+2. Wait for the sampling trigger signal.
+3. Activate the sampling mechanism.
+4. Simulate the sample collection process for testing.
 
+This air testing demo verifies that the sampling trigger and control logic function correctly before field deployment.
 
-## Technical Architecture
-
-The AquaCast system consists of several modules.
-
-
-Drone Control Module
-
-Handles communication between the drone and the sampling device.
-
-
-Sampling Control System
-
-Controls bottle switching and depth-triggered sampling.
-
-
-Mission Dashboard
-
-Provides a user interface for configuring sampling missions and recording mission data.
-
+---
 
 ## User Manual
 
-A detailed user manual for installation, operation, and safety guidelines is included in:
-
+A detailed user manual describing system setup, installation, operation, and safety guidelines is included in:
 
 docs/AquaCast＿UserManual.pdf
 
-
+---
 
 ## Team Members
 
-Shareef Jasim (shareef1@uw.edu)
+Shareef Jasim — shareef1@uw.edu  
+Joyce Chou — ychou3@uw.edu  
+Chang Li — lic170@uw.edu  
+Victoria Yang — vicjny@uw.edu  
 
-Joyce Chou (ychou3@uw.edu)
+University of Washington  
+Global Innovation Exchange (GIX)
 
-Chang Li (lic170@uw.edu)
-
-Victoria Yang (vicjny@uw.edu)
-
+---
 
 ## License
 
-This project is developed for academic purposes as part of a university engineering
+This project is developed for academic purposes as part of a university engineering course.
